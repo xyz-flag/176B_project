@@ -12,12 +12,15 @@ from Crypto.Util.Padding import unpad
 from Crypto.Random import get_random_bytes
 
 PORT = 11223
+serect_key_1 = b'\xdc\x8e@\xa2\x90\x9cF\xf6!\x18\xccK\xc2WWo'
+serect_key_2 = b'x}\x18\x86\xee+\xf2\x15\xadiBQ>\x80q\x93'
 
 def generate_secret_key():
     serect_key = get_random_bytes(16)
     return serect_key
 
 def symm_encryption(text, serect_key):
+    #print(datetime.datetime.now().time())
     data = text.encode('ASCII')
     cipher = AES.new(serect_key, AES.MODE_CBC)
     ct_bytes = cipher.encrypt(pad(data, AES.block_size))
@@ -28,6 +31,7 @@ def symm_encryption(text, serect_key):
 
 
 def symm_decryption(ciphertext,serect_key):
+    #print(datetime.datetime.now().time())
     b64 = json.loads(ciphertext)
     iv = b64decode(b64["iv"])
     ct = b64decode(b64["ciphertext"])
@@ -54,14 +58,14 @@ def broadcast_data(message):
 
 CONNECTION_LIST = []
 RECV_BUFFER = 4096 # Advisable to keep it as an exponent of 2
-serect_key = generate_secret_key()
+#serect_key = generate_secret_key()
 
 SERVER_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 SERVER_SOCKET.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 SERVER_SOCKET.bind(("", PORT)) # empty addr string means INADDR_ANY
 
 print("Listening...")
-SERVER_SOCKET.listen(2) 
+SERVER_SOCKET.listen(2)
 
 CONNECTION_LIST.append(SERVER_SOCKET)
 print("Server started!")
@@ -78,33 +82,57 @@ while True:
             # Adding \r to prevent message overlapping when another user
             # types it's message.
             print("\rClient ({0}, {1}) connected".format(ADDR[0], ADDR[1]))
-            
+            result = 'ww'
         else: # Some incoming message from a client
-            
+
+
             try: # Data recieved from client, process it
+
                 DATA = SOCK.recv(RECV_BUFFER).decode()
+                print(DATA)
+                print(type(DATA))
                 if DATA:
-                    ADDR = SOCK.getpeername() # get remote address of the socket
-                    # message = "\r[{}:{}]:".format(ADDR[0], ADDR[1], DATA.decode())
-                    # cipher = symm_encryption(message,serect_key)
-                    # broadcast_data(cipher.encode())
+                    ADDR = SOCK.getpeername()
                     notification = "\rA message from[{}:{}]:".format(ADDR[0], ADDR[1])
-                    # cipher = symm_encryption(notification,serect_key)
-                    broadcast_data(notification.encode())
+                    #broadcast_data(notification.encode())
                     message = DATA
-                    broadcast_data(message.encode())
-            
+                    i =1
+                    if i == 0:
+                        broadcast_data(notification.encode())
+                        broadcast_data(message.encode())
+                    elif i == 1:
+
+                        ###receive the message from client and send to another client
+
+                        ###symm_decryption first
+                        new_value = symm_decryption(message, serect_key_1)
+
+                        ###then, encryption
+                        result = symm_encryption(new_value,serect_key_2)
+                        print("new message", result)
+                        #broadcast_data(notification.encode())
+                        broadcast_data(notification+result.encode())
+
+
+
+
+
+
+
             except Exception as msg: # Errors happened, client disconnected
-                print(type(msg).__name__, msg)
-                print("\rClient ({0}, {1}) disconnected.".format(ADDR[0], ADDR[1]))
-                broadcast_message = "\rClient ({0}, {1}) is offline".format(ADDR[0], ADDR[1]).encode()
-                broadcast_data(broadcast_message)
-                SOCK.close()
-                try:
-                    CONNECTION_LIST.remove(SOCK)
-                except ValueError as msg:
-                    print("{}:{}.".format(type(msg).__name__, msg))
+
+                broadcast_data(result.encode())
+                # print(type(msg).__name__, msg)
+                # print("\rClient ({0}, {1}) disconnected.".format(ADDR[0], ADDR[1]))
+                # broadcast_message = "\rClient ({0}, {1}) is offline".format(ADDR[0], ADDR[1]).encode()
+                # broadcast_data(broadcast_message)
+                # SOCK.close()
+                # try:
+                #     print("hello")
+                #     CONNECTION_LIST.remove(SOCK)
+                #
+                # except ValueError as msg:
+                #     print("{}:{}.".format(type(msg).__name__, msg))
             continue
 
 SERVER_SOCKET.close()
-
