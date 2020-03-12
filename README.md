@@ -1,2 +1,2 @@
 # 176B_project
-use the final version branch !!
+use the finalTCP branch as submitted version!!
