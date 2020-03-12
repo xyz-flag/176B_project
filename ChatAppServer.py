@@ -12,10 +12,16 @@ from Crypto.Util.Padding import unpad
 from Crypto.Random import get_random_bytes
 
 PORT = 11223
+serect_key_1 = b'\xdc\x8e@\xa2\x90\x9cF\xf6!\x18\xccK\xc2WWo'
+serect_key_2 = b'x}\x18\x86\xee+\xf2\x15\xadiBQ>\x80q\x93'
 
-def generate_secret_key():
-    serect_key = get_random_bytes(16)
-    return serect_key
+#=====================================================
+# not being used when really test the time delay
+#
+# def generate_secret_key():
+#     serect_key = get_random_bytes(16)
+#     return serect_key
+#=====================================================
 
 def symm_encryption(text, serect_key):
     data = text.encode('ASCII')
@@ -36,14 +42,13 @@ def symm_decryption(ciphertext,serect_key):
     data = text.decode('ASCII')
     return data
 
+# send msg to all clients include sender
 def broadcast_data(message):
-    """ Sends a message to all sockets in the connection list. """
-    # Send message to everyone, except the server.
     for sock in CONNECTION_LIST:
-        if sock != SERVER_SOCKET:
+        if sock != SERVER_SOCKET: #yeah, i want you
             try:
-                sock.send(message) # send all data at once
-            except Exception as msg: # Connection was closed. Errors
+                sock.send(message)
+            except Exception as msg: # Connecting failed
                 print(type(msg).__name__)
                 sock.close()
                 try:
@@ -52,59 +57,67 @@ def broadcast_data(message):
                     print("{}:{}".format(type(msg).__name__, msg))
 
 
+#basic value and environment setup for receiving and sending
 CONNECTION_LIST = []
-RECV_BUFFER = 4096 # Advisable to keep it as an exponent of 2
-serect_key = generate_secret_key()
-
 SERVER_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 SERVER_SOCKET.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-SERVER_SOCKET.bind(("", PORT)) # empty addr string means INADDR_ANY
+SERVER_SOCKET.bind(("", PORT))
 
+#UI setup
+#============================================
 print("Listening...")
-SERVER_SOCKET.listen(2) 
+SERVER_SOCKET.listen(2)
 
 CONNECTION_LIST.append(SERVER_SOCKET)
 print("Server started!")
+#============================================
+
 
 while True:
-    # Get the list sockets which are ready to be read through select
-    READ_SOCKETS, WRITE_SOCKETS, ERROR_SOCKETS = select.select(CONNECTION_LIST, [], [])
-    for SOCK in READ_SOCKETS: # New connection
+    READ_SOCKETS, WRITE_SOCKETS, ERROR_SOCKETS = select.select(CONNECTION_LIST, [], [])# setup list
 
-        # Handle the case in which there is a new connection recieved through server_socket
-        if SOCK == SERVER_SOCKET:
-            SOCKFD, ADDR = SERVER_SOCKET.accept()
-            CONNECTION_LIST.append(SOCKFD) # add socket descriptor
-            # Adding \r to prevent message overlapping when another user
-            # types it's message.
-            print("\rClient ({0}, {1}) connected".format(ADDR[0], ADDR[1]))
-            
-        else: # Some incoming message from a client
-            
-            try: # Data recieved from client, process it
-                DATA = SOCK.recv(RECV_BUFFER).decode()
+    #establish new connection
+    for SOCK in READ_SOCKETS:
+
+        #receive msg from client
+        #try attempt
+        #getpeername
+        #process data --> 1. direct send
+        #             --> 2. decrypt, encrypt
+        #===========================================
+        if SOCK != SERVER_SOCKET:
+            try:
+                DATA = SOCK.recv(4096).decode()
                 if DATA:
-                    ADDR = SOCK.getpeername() # get remote address of the socket
-                    # message = "\r[{}:{}]:".format(ADDR[0], ADDR[1], DATA.decode())
-                    # cipher = symm_encryption(message,serect_key)
-                    # broadcast_data(cipher.encode())
+                    ADDR = SOCK.getpeername()
                     notification = "\rA message from[{}:{}]:".format(ADDR[0], ADDR[1])
-                    # cipher = symm_encryption(notification,serect_key)
-                    broadcast_data(notification.encode())
                     message = DATA
-                    broadcast_data(message.encode())
-            
-            except Exception as msg: # Errors happened, client disconnected
+                    i =1
+                    if i == 1:# mode 2
+                        new_value = symm_decryption(message, serect_key_1)
+                        message = symm_encryption(new_value,serect_key_2)
+                    broadcast_data((notification+message).encode())
+        #============================================
+
+
+            except Exception as msg: # disconnet as the sinal for error
                 print(type(msg).__name__, msg)
-                print("\rClient ({0}, {1}) disconnected.".format(ADDR[0], ADDR[1]))
-                broadcast_message = "\rClient ({0}, {1}) is offline".format(ADDR[0], ADDR[1]).encode()
-                broadcast_data(broadcast_message)
+                disconnet = "\rClient ({0}, {1}) disconnected.".format(ADDR[0], ADDR[1])
+                print(disconnet)
+                broadcast_data(disconnet)
                 SOCK.close()
+
                 try:
+                    print("hello, this is second try")
                     CONNECTION_LIST.remove(SOCK)
                 except ValueError as msg:
                     print("{}:{}.".format(type(msg).__name__, msg))
+
             continue
 
-SERVER_SOCKET.close()
+        else: # connection connected
+            SOCKFD, ADDR = SERVER_SOCKET.accept()
+            CONNECTION_LIST.append(SOCKFD)
+            print("\rClient ({0}, {1}) connected".format(ADDR[0], ADDR[1]))
 
+SERVER_SOCKET.close()

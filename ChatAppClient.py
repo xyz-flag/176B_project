@@ -11,12 +11,15 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 from Crypto.Util.Padding import unpad
 from Crypto.Random import get_random_bytes
+import datetime
 
-
-def generate_secret_key():
-    serect_key = get_random_bytes(16)
-    return serect_key
-
+#=====================================================
+# not being used when really test the time delay
+#
+# def generate_secret_key():
+#     serect_key = get_random_bytes(16)
+#     return serect_key
+#=====================================================
 
 def symm_encryption(text, serect_key):
     data = text.encode('ASCII')
@@ -29,69 +32,98 @@ def symm_encryption(text, serect_key):
 
 
 def symm_decryption(ciphertext,serect_key):
-    b64 = json.loads(ciphertext)
-    iv = b64decode(b64["iv"])
-    ct = b64decode(b64["ciphertext"])
-    cipher = AES.new(serect_key, AES.MODE_CBC, iv)
-    text = unpad(cipher.decrypt(ct), AES.block_size)
-    data = text.decode('ASCII')
-    return data
+    try:
+        b64 = json.loads(ciphertext)
+        iv = b64decode(b64["iv"])
+        ct = b64decode(b64["ciphertext"])
+        cipher = AES.new(serect_key, AES.MODE_CBC, iv)
+        text = unpad(cipher.decrypt(ct), AES.block_size)
+        data = text.decode('ASCII')
+    except ValueError:
+        print("ValueError")
+    else:
+        return data
 
 
 def main():
+    #command line arguments checking
     if len(sys.argv) < 3:
         print("Usage : python {0} hostname port".format(sys.argv[0]))
         sys.exit()
 
+    #basic set up for connection and value ruquired
+    #========================
     HOST = sys.argv[1]
     PORT = int(sys.argv[2])
-    # serect_key = generate_secret_key()
-    serect_key = b'\xdc\x8e@\xa2\x90\x9cF\xf6!\x18\xccK\xc2WWo'
-    ivalue = b'\xdc\x8e@\xa2\x90\x9cF\xf6!\x18\xccK\xc2WWo'
+
+    serect_key_1 = b'\xdc\x8e@\xa2\x90\x9cF\xf6!\x18\xccK\xc2WWo'
+    serect_key_2 = b'x}\x18\x86\xee+\xf2\x15\xadiBQ>\x80q\x93'
 
     MASTER_SOCK = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     MASTER_SOCK.settimeout(200)
+    #========================
 
-    # connect to remote host
+
+    # go conection with connected signal
+    #========================
     try:
         MASTER_SOCK.connect((HOST, PORT))
     except Exception as msg:
         print(type(msg).__name__)
         print("Unable to connect")
         sys.exit()
-
     print("Connected to remote host. Start sending messages")
+    #========================
+
+
+    # baby go!
+    #========================
     while True:
         SOCKET_LIST = [sys.stdin, MASTER_SOCK]
-        # Get the list sockets which are readable
-        READ_SOCKETS, WRITE_SOCKETS, ERROR_SOCKETS = select.select(SOCKET_LIST, [], [])
-        
-        for every_sock in READ_SOCKETS: #incoming message from remote server
-            if every_sock == MASTER_SOCK: #message is for this client
-                data = every_sock.recv(4096).decode()
-                
-                if not data:  #exit
+        READ_SOCKETS, WRITE_SOCKETS, ERROR_SOCKETS = select.select(SOCKET_LIST, [], []) #set up list
+
+        for sock in READ_SOCKETS: #received msg from server
+            if sock == MASTER_SOCK:
+                data = sock.recv(4096).decode()
+
+                if not data:  # |- _ -!| we don't talk anymore like we used to be
                     print("\nDisconnected from chat server")
-                    sys.exit()
-                
-                else: # print data
-                    # iv_value = data[0]
-                    # ct_value = data[1]
-                    # print(type(iv_value), type(ct_value))
-                    # cipher = json.dumps({'iv': iv_value, 'ciphertext': ct_value})
-                    #print(symm_decryption(data[encryption_header:], serect_key), end = "")
+                    sys.exit() # goodbye my almost lover
+
+                else:
                     if "offline" in data:
                         print(data)
+
+                    #===================================
+                    # decrypt received sock to plaintext
                     else:
-                        
-                        encryption_header = data.index("{")
-                        print(data[0:encryption_header])
-                        print(symm_decryption(data[encryption_header:], serect_key), end = "")
-            
-            else: #user entered a message
+                        #print(data)
+                        #print(type(data))
+                        encryption_header = data.index('{') # { is the divider for header and value
+                        print (datetime.datetime.now().time()) #show time for comparison
+                        print( (data[0:encryption_header])) #print string about A message from[127.0.0.1:63849]:
+
+                        j = 2   #personal trick to make switch two modes for tcp easiser, value decided by programmer
+                        if j == 1:
+                            print(symm_decryption(data[data.index('{'):], serect_key_1)) # i^3^i
+                        elif j == 2:
+                            print(symm_decryption(data[data.index('{'):], serect_key_2)) # i^3^i
+                    #====================================
+
+
+            # input plaintext
+            #client send and encrypt messages
+            #show time, send tag and msg
+            #sendall
+            #========================
+            else:
                 msg = sys.stdin.readline()
-                print("\x1b[1A" + "\x1b[2K", end="") # erase last line
-                cipher = symm_encryption(msg,serect_key)
+                print("\x1b[1A" + "\x1b[2K") # erase the orignal input to for better looking
+                print(datetime.datetime.now().time(), "send: ")
+                print(msg)
+                cipher = symm_encryption(msg,serect_key_1) # serect_key_1 never need to change
                 MASTER_SOCK.sendall(cipher.encode())
+            #========================
+
 
 main()
